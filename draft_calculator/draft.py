@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
+import argparse
 import csv
-import operator
 import pprint
 import random
 
@@ -22,6 +22,10 @@ ROSTER_SIZE = dict(
 )
 
 DRAFT_ORDERS_AGE = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-v', '--verbose', action='count', help='Display verbose output')
+args = parser.parse_args()
 
 def read_data():
     draft_data = {}
@@ -57,7 +61,8 @@ def draft(draft_data, draft_orders):
     drafted_positions = {p: 0 for p in ROSTER_SIZE.keys()}
     draft_results = [[] for _ in range(NUM_TEAMS)]
     for draft_round in range(sum(ROSTER_SIZE.values())):
-        # print 'ROUND', str(draft_round)
+        if args.verbose >= 3:
+            print 'ROUND', str(draft_round)
         for team in range(len(draft_orders)):
             if draft_round % 2 != 0:
                 team = NUM_TEAMS - 1 - team
@@ -70,8 +75,10 @@ def draft(draft_data, draft_orders):
 
             drafted_positions[position] += 1
             pick += 1
-            # print 'Pick', str(pick) + ':', 'Team', str(team), 'drafts', player['Player Name']
-        # print
+            if args.verbose >= 3:
+                print 'Pick', str(pick) + ':', 'Team', str(team), 'drafts', player['Player Name']
+        if args.verbose >= 3:
+            print
     return draft_results
 
 
@@ -88,16 +95,17 @@ def record_draft_results(current_generation, draft_results):
             DRAFT_ORDERS_AGE[team][draft_orders_key]['age'] += 1
             DRAFT_ORDERS_AGE[team][draft_orders_key]['total'] += sum([float(player['fpts']) for player in draft_result])
 
-    print 'Generation', current_generation, 'Results'
-    for team in range(len(draft_results)):
-        print 'Team', team, 'draft:'
-        for draft_number in range(10):
-            draft_result = draft_results[team][draft_number]
-            display_orders = '-'.join([player['position'] for player in draft_result])
-            print ' ', sum([float(player['fpts']) for player in draft_result]),
-            print '(' + display_orders + ')',
-            print int(DRAFT_ORDERS_AGE[team][display_orders]['age']), DRAFT_ORDERS_AGE[team][display_orders]['total'] / DRAFT_ORDERS_AGE[team][display_orders]['age']
-        print
+    if args.verbose >= 1:
+        print 'Generation', current_generation, 'Results'
+        for team in range(len(draft_results)):
+            print 'Team', team, 'draft:'
+            for draft_number in range(10):
+                draft_result = draft_results[team][draft_number]
+                display_orders = '-'.join([player['position'] for player in draft_result])
+                print ' ', sum([float(player['fpts']) for player in draft_result]),
+                print '(' + display_orders + ')',
+                print int(DRAFT_ORDERS_AGE[team][display_orders]['age']), DRAFT_ORDERS_AGE[team][display_orders]['total'] / DRAFT_ORDERS_AGE[team][display_orders]['age']
+            print
 
 
 def spawn_next_generation(draft_results):
@@ -105,11 +113,15 @@ def spawn_next_generation(draft_results):
     fit_orders_by_team = [[] for _ in range(NUM_TEAMS)]
     for team in range(len(draft_results)):
         for draft_number in range(FITNESS):
-            fit_orders_by_team[team].append([player['position']
-                                             for player in draft_results[team][draft_number]])
+            fit_orders = [player['position'] for player in draft_results[team][draft_number]]
+            fit_orders_by_team[team].append(fit_orders)
+
+            # mutate team drafts
+            i = random.randint(0, len(fit_orders)-2)
+            fit_orders[i+1], fit_orders[i] = fit_orders[i], fit_orders[i+1]
+            fit_orders_by_team[team].append(fit_orders)
 
     # make hybrid team drafts from fit parents
-    # mutate team drafts
 
     # pair up top team drafts to make full draft for next generation
     next_gen_draft_orders = []
