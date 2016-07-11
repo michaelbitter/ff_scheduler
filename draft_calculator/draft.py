@@ -21,16 +21,34 @@ ROSTER_SIZE = dict(
     DEF=1,
 )
 
+# Logging Levels
+STANDARD = 0
+INFO = 1
+DETAIL = 2
+DEBUG = 3
+
 DRAFT_ORDERS_AGE = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--verbose', action='count', help='Display verbose output')
+parser.add_argument('-y', '--year', action='store', help="Use previous year's score results")
 args = parser.parse_args()
+
+def log(log_level, *msgs, **kwargs):
+    msg = ' '.join(map(str, msgs))
+    if args.verbose >= log_level:
+        if kwargs.get('no_newline', False):
+            print msg,
+        else:
+            print msg
+
 
 def read_data():
     draft_data = {}
+    year = '-{}'.format(args.year) if args.year else ''
     for position in ROSTER_SIZE.keys():
-        with open('data/{}.csv'.format(position), 'rb') as csvfile:
+
+        with open('data/{}{}.csv'.format(position, year), 'rb') as csvfile:
             player_reader = csv.DictReader(csvfile)
             draft_data[position] = []
             rank = 1
@@ -61,8 +79,7 @@ def draft(draft_data, draft_orders):
     drafted_positions = {p: 0 for p in ROSTER_SIZE.keys()}
     draft_results = [[] for _ in range(NUM_TEAMS)]
     for draft_round in range(sum(ROSTER_SIZE.values())):
-        if args.verbose >= 3:
-            print 'ROUND', str(draft_round)
+        log(DEBUG, 'ROUND ' + str(draft_round))
         for team in range(len(draft_orders)):
             if draft_round % 2 != 0:
                 team = NUM_TEAMS - 1 - team
@@ -75,10 +92,8 @@ def draft(draft_data, draft_orders):
 
             drafted_positions[position] += 1
             pick += 1
-            if args.verbose >= 3:
-                print 'Pick', str(pick) + ':', 'Team', str(team), 'drafts', player['Player Name']
-        if args.verbose >= 3:
-            print
+            log(DEBUG, 'Pick ' + str(pick) + ': ' + 'Team ' + str(team) + ' drafts ' + player['Player Name'])
+        log(DEBUG, '')
     return draft_results
 
 
@@ -86,26 +101,26 @@ def record_draft_results(current_generation, draft_results):
     # sort results
     for team in range(len(draft_results)):
         team_results = draft_results[team]
-        team_results.sort(
-            key=lambda players: sum([float(player['fpts']) for player in players]),
-            reverse=True
-        )
         for draft_result in team_results:
             draft_orders_key = '-'.join([player['position'] for player in draft_result])
             DRAFT_ORDERS_AGE[team][draft_orders_key]['age'] += 1
             DRAFT_ORDERS_AGE[team][draft_orders_key]['total'] += sum([float(player['fpts']) for player in draft_result])
+        team_results.sort(
+            key=lambda players: DRAFT_ORDERS_AGE[team]['-'.join([player['position'] for player in players])]['total'] / DRAFT_ORDERS_AGE[team]['-'.join([player['position'] for player in players])]['age'],
+            reverse=True
+        )
 
-    if args.verbose >= 1:
-        print 'Generation', current_generation, 'Results'
-        for team in range(len(draft_results)):
-            print 'Team', team, 'draft:'
-            for draft_number in range(10):
-                draft_result = draft_results[team][draft_number]
-                display_orders = '-'.join([player['position'] for player in draft_result])
-                print ' ', sum([float(player['fpts']) for player in draft_result]),
-                print '(' + display_orders + ')',
-                print int(DRAFT_ORDERS_AGE[team][display_orders]['age']), DRAFT_ORDERS_AGE[team][display_orders]['total'] / DRAFT_ORDERS_AGE[team][display_orders]['age']
-            print
+    log(INFO, 'Generation', current_generation, 'Results')
+    for team in range(len(draft_results)):
+        log(INFO, 'Team', team, 'draft:')
+        for draft_number in range(10):
+            draft_result = draft_results[team][draft_number]
+            display_orders = '-'.join([player['position'] for player in draft_result])
+            log(INFO, ' ', sum([float(player['fpts']) for player in draft_result]), no_newline=True)
+            log(INFO, '(' + display_orders + ')', no_newline=True)
+            log(INFO, int(DRAFT_ORDERS_AGE[team][display_orders]['age']), DRAFT_ORDERS_AGE[team][display_orders]['total'] / DRAFT_ORDERS_AGE[team][display_orders]['age'])
+            log(DETAIL, ' ', ', '.join([player['Player Name'] for player in draft_result]))
+        log(INFO, '')
 
 
 def spawn_next_generation(draft_results):
@@ -117,9 +132,10 @@ def spawn_next_generation(draft_results):
             fit_orders_by_team[team].append(fit_orders)
 
             # mutate team drafts
-            i = random.randint(0, len(fit_orders)-2)
-            fit_orders[i+1], fit_orders[i] = fit_orders[i], fit_orders[i+1]
-            fit_orders_by_team[team].append(fit_orders)
+            if random.random() < 0.10:
+                i = random.randint(0, len(fit_orders)-2)
+                fit_orders[i+1], fit_orders[i] = fit_orders[i], fit_orders[i+1]
+                fit_orders_by_team[team].append(fit_orders)
 
     # make hybrid team drafts from fit parents
 
