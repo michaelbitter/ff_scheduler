@@ -53,7 +53,8 @@ def read_data():
             draft_data[position] = []
             rank = 1
 
-            for player in player_reader:
+            for player in sorted(player_reader, key=lambda p: float(p['fpts']), reverse=True):
+                log(DEBUG, '{}: {} {}'.format(rank, position, player['Player Name']))
                 if rank > ROSTER_SIZE[position] * NUM_TEAMS: # XXX TODO: account for flex/bench
                     break
 
@@ -92,7 +93,8 @@ def draft(draft_data, draft_orders):
 
             drafted_positions[position] += 1
             pick += 1
-            log(DEBUG, 'Pick ' + str(pick) + ': ' + 'Team ' + str(team) + ' drafts ' + player['Player Name'])
+            log(DEBUG, 'Pick {}: Team {} drafts {}'.format(pick, team, player['Player Name']))
+
         log(DEBUG, '')
     return draft_results
 
@@ -176,12 +178,12 @@ def main():
         generation_draft_orders = spawn_next_generation(draft_results)
 
     for team, drafts in DRAFT_ORDERS_AGE.iteritems():
-        print 'Summary for team', team, ':'
+        log(STANDARD, 'Summary for team', team, ':')
         sorted_orders_by_age = sorted(drafts.items(), key=lambda d: get_sort_value(d), reverse=True)
         for i in range(10):
             orders, orders_age = sorted_orders_by_age[i]
-            print ' ', int(orders_age['age']), (orders_age['total'] / orders_age['age']), '(' + orders + ')'
-        print
+            log(STANDARD, ' ', int(orders_age['age']), (orders_age['total'] / orders_age['age']), '(' + orders + ')')
+        log(STANDARD, '')
 
 
 if __name__ == '__main__':
