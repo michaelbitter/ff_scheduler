@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 
 import argparse
+import copy
 import csv
 import pprint
 import random
 
-POPULATION_SIZE = 100
-GENERATIONS = 1
-FITNESS = int(POPULATION_SIZE * 0.25)
+from collections import defaultdict
+
+POPULATION_SIZE = 10000
+GENERATIONS = 10
+FITNESS = int(POPULATION_SIZE * 0.25) or 1
 
 NUM_TEAMS = 10
 ROSTER_SIZE = dict(
@@ -20,13 +23,16 @@ ROSTER_SIZE = dict(
 )
 
 AUCTION_BUDGET = 200
-MAXIMUM_BID = 80
+MAXIMUM_BID = 120
 
 # Logging Levels
 STANDARD = 0
 INFO = 1
 DETAIL = 2
 DEBUG = 3
+
+DRAFT_BUDGETS_AGE = defaultdict(lambda: defaultdict(float))
+PLAYER_BUDGETS = defaultdict(list)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--verbose', action='count', help='Display verbose output')
@@ -63,6 +69,10 @@ def read_data():
     return draft_data
 
 
+def distribute(additional_budget, draft_budget):
+    draft_budget[0]['budget'] += additional_budget
+
+
 def get_random_pp_draft_budget():
     """pp stands for positional player"""
     # XXX refactor to base this off of get_random_pp_draft_order
@@ -80,6 +90,9 @@ def get_random_pp_draft_budget():
         position_budget = random.randint(1, max_bid)
         budget_remaining -= position_budget
         pp_draft_budget.append({'position': position, 'budget': position_budget, 'drafted': False})
+
+    if budget_remaining > 0:
+        distribute(budget_remaining, pp_draft_budget)
     return sorted(pp_draft_budget, key=lambda p: p['budget'], reverse=True)
 
 
@@ -101,7 +114,7 @@ def draft(draft_data, draft_budgets):
             player = draft_data[position][drafted_positions[position]]
             player['pick'] = pick
             player['position'] = position
-            log(INFO, 'Pick {}: Team {} nominates {} {}'.format(pick, team, position, player['Player Name']))
+            log(DETAIL, 'Pick {}: Team {} nominates {} {}'.format(pick, team, position, player['Player Name']))
 
             # auction off the player
             # XXX we don't need each team to nominate every pp. Instead,
@@ -125,36 +138,136 @@ def draft(draft_data, draft_budgets):
                     winning_team = bidding_team
                     winning_bid = team_bid
 
-            player['value'] = winning_bid['budget']
+            player_copy = copy.copy(player)
+            player_copy['value'] = winning_bid['budget']
             winning_bid['drafted'] = True
-            draft_results[winning_team].append(player)
+            draft_results[winning_team].append(player_copy)
 
             drafted_positions[position] += 1
             pick += 1
-            log(INFO, 'Pick {}: Team {} drafts {} {} for ${}'.format(pick, winning_team, position, player['Player Name'], winning_bid['budget']))
+            log(DETAIL, 'Pick {}: Team {} drafts {} {} for ${}'.format(pick, winning_team, position, player['Player Name'], winning_bid['budget']))
 
     return draft_results
 
 
-def record_draft_results(draft_results):
-    pass
+def sanity_check(draft_budget):
+    budget = sum([p['budget'] for p in draft_budget])
+    if budget != AUCTION_BUDGET:
+        print 'OVER BUDGET!!! ({})'.format(budget)
+        pprint.pprint(draft_budget)
+
+
+def make_draft_budget_key(draft_budget):
+    sanity_check(draft_budget) # XXX
+    return '-'.join(['{}:{}'.format(player['position'], player['budget'])
+                    for player in draft_budget])
+
+
+def draft_budget_key_to_budgets(budget_key):
+    draft_budgets = []
+    position_budgets = budget_key.split('-')
+    for position_budget in position_budgets:
+        p, b = position_budget.split(':')
+        draft_budgets.append({'position': p, 'budget': int(b), 'drafted': False})
+    sanity_check(draft_budgets) # XXX
+    return draft_budgets
+
+
+def record_draft_results(current_generation, drafts_results):
+    log(DETAIL, 'Generation', current_generation, 'Results')
+    for draft_results in drafts_results:
+        for team in range(len(draft_results)):
+            draft_result = draft_results[team]
+            score = sum([float(player['fpts']) for player in draft_result])
+
+            draft_budget = [{'position': player['position'], 'budget': player['value'], 'Player Name': player['Player Name']} for player in draft_result]
+            draft_budget.sort(key=lambda p: p['budget'], reverse=True)
+
+            budget_key = make_draft_budget_key(draft_budget)
+            DRAFT_BUDGETS_AGE[budget_key]['age'] += 1
+            DRAFT_BUDGETS_AGE[budget_key]['total'] += score
+
+            log(DETAIL, 'Team', team, 'draft score:', score)
+            log(DETAIL, '\n'.join(['{}: {} {}'.format(b['position'], b['budget'], b['Player Name']) for b in draft_budget]))
+            log(DETAIL, '')
+
+
+def spawn_next_generation(drafts_results):
+    # select the top fit team drafts
+    fit_budgets = []
+    combined_results = []
+    for draft_results in drafts_results:
+        for draft_result in draft_results:
+            draft_budget = [{'position': player['position'], 'budget': player['value'], 'Player Name': player['Player Name'], 'fpts': player['fpts']} for player in draft_result]
+            draft_budget.sort(key=lambda p: p['budget'], reverse=True)
+            combined_results.append(draft_budget)
+    combined_results.sort(key=lambda d: sum([float(player['fpts']) for player in d]), reverse=True)
+
+    for draft_number in range(FITNESS):
+        for player in combined_results[draft_number]:
+            PLAYER_BUDGETS[player['Player Name']].append(player['budget'])
+        fit_budgets.append(make_draft_budget_key(combined_results[draft_number]))
+
+        # mutate team drafts
+        # if random.random() < 0.10:
+        #     i = random.randint(0, len(fit_budgets)-2)
+        #     fit_budgets[i+1], fit_budgets[i] = fit_budgets[i], fit_budgets[i+1]
+        #     fit_budgets_by_team[team].append(fit_budgets)
+
+    # make hybrid team drafts from fit parents
+
+    # pair up top team drafts to make full draft for next generation
+    next_gen_draft_budgets = []
+    # XXX not sure what to call this magic number... matings?
+    for _ in range(int(POPULATION_SIZE * 0.75)):
+        draft_budgets = []
+        for team in range(NUM_TEAMS):
+
+            draft_budgets.append(draft_budget_key_to_budgets(random.choice(fit_budgets)))
+        next_gen_draft_budgets.append(draft_budgets)
+
+    return next_gen_draft_budgets
+
+
+def median(lst):
+    lst = sorted(lst)
+    if len(lst) < 1:
+            return None
+    if len(lst) %2 == 1:
+            return lst[((len(lst)+1)/2)-1]
+    else:
+            return int((float(sum(lst[(len(lst)/2)-1:(len(lst)/2)+1]))/2.0) + 0.5)
+
 
 def main():
     draft_data = read_data()
 
-    draft_budgets = []
-    for team in range(NUM_TEAMS):
-        draft_budgets.append(get_random_pp_draft_budget())
+    generation_draft_budgets = []
+    for generation in range(GENERATIONS):
+        for _ in range(POPULATION_SIZE - len(generation_draft_budgets)):
+            draft_budgets = []
+            for team in range(NUM_TEAMS):
+                team_budget = get_random_pp_draft_budget()
+                log(DETAIL, 'Team', team, 'budgets', make_draft_budget_key(team_budget))
+                draft_budgets.append(team_budget)
+            generation_draft_budgets.append(draft_budgets)
 
-    for team in range(len(draft_budgets)):
-        draft_budget = draft_budgets[team]
-        log(DETAIL, 'Team', team, 'budgets:')
-        log(DETAIL, '\n'.join(['{}: {}'.format(b['position'], b['budget']) for b in draft_budget]))
-        log(DETAIL, '')
+        draft_results = []
+        for draft_budgets in generation_draft_budgets:
+            draft_results.append(draft(draft_data, draft_budgets))
 
-    results = draft(draft_data, draft_budgets)
+        record_draft_results(generation, draft_results)
+        generation_draft_budgets = spawn_next_generation(draft_results)
 
-    record_draft_results(results)
+    for player in sorted(PLAYER_BUDGETS.keys()):
+        log(INFO, '{}:'.format(player), median(PLAYER_BUDGETS[player]))
+
+    log(STANDARD, 'Summary of drafting budgets:')
+    sorted_budgets_by_age = sorted(DRAFT_BUDGETS_AGE.items(), key=lambda d: d[1]['total'] / d[1]['age'], reverse=True)
+
+    for i in range(10):
+        budgets, budgets_age = sorted_budgets_by_age[i]
+        log(STANDARD, ' ', int(budgets_age['age']), (budgets_age['total'] / budgets_age['age']), '(' + budgets + ')')
 
 if __name__ == '__main__':
     main()
