@@ -23,7 +23,7 @@ ROSTER_SIZE = dict(
 )
 
 AUCTION_BUDGET = 200
-MAXIMUM_BID = 120
+MAXIMUM_BID = 90
 
 # Logging Levels
 STANDARD = 0
@@ -32,7 +32,7 @@ DETAIL = 2
 DEBUG = 3
 
 DRAFT_BUDGETS_AGE = defaultdict(lambda: defaultdict(float))
-PLAYER_BUDGETS = defaultdict(list)
+PLAYER_BUDGETS = defaultdict(lambda: defaultdict(list))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--verbose', action='count', help='Display verbose output')
@@ -201,11 +201,14 @@ def spawn_next_generation(drafts_results):
             draft_budget = [{'position': player['position'], 'budget': player['value'], 'Player Name': player['Player Name'], 'fpts': player['fpts']} for player in draft_result]
             draft_budget.sort(key=lambda p: p['budget'], reverse=True)
             combined_results.append(draft_budget)
-    combined_results.sort(key=lambda d: sum([float(player['fpts']) for player in d]), reverse=True)
+    #combined_results.sort(key=lambda d: sum([float(player['fpts']) for player in d]), reverse=True)
+    combined_results.sort(
+        key=lambda d: DRAFT_BUDGETS_AGE[make_draft_budget_key(d)]['total'] / DRAFT_BUDGETS_AGE[make_draft_budget_key(d)]['age'],
+        reverse=True)
 
     for draft_number in range(FITNESS):
         for player in combined_results[draft_number]:
-            PLAYER_BUDGETS[player['Player Name']].append(player['budget'])
+            PLAYER_BUDGETS[player['position']][player['Player Name']].append(player['budget'])
         fit_budgets.append(make_draft_budget_key(combined_results[draft_number]))
 
         # mutate team drafts
@@ -259,15 +262,22 @@ def main():
         record_draft_results(generation, draft_results)
         generation_draft_budgets = spawn_next_generation(draft_results)
 
-    for player in sorted(PLAYER_BUDGETS.keys()):
-        log(INFO, '{}:'.format(player), median(PLAYER_BUDGETS[player]))
+    for position in sorted(PLAYER_BUDGETS.keys()):
+        log(INFO, '{} player values:'.format(position))
+        for player in sorted(PLAYER_BUDGETS[position], key=lambda p: median(PLAYER_BUDGETS[position][p]), reverse=True):
+            log(INFO, '{}:'.format(player), median(PLAYER_BUDGETS[position][player]))
+        log(INFO, '')
 
     log(STANDARD, 'Summary of drafting budgets:')
-    sorted_budgets_by_age = sorted(DRAFT_BUDGETS_AGE.items(), key=lambda d: d[1]['total'] / d[1]['age'], reverse=True)
+    sorted_budgets_by_age = sorted(DRAFT_BUDGETS_AGE.items(),
+                                   key=lambda d: d[1]['total'] / d[1]['age'],
+                                   reverse=True)
 
     for i in range(10):
         budgets, budgets_age = sorted_budgets_by_age[i]
-        log(STANDARD, ' ', int(budgets_age['age']), (budgets_age['total'] / budgets_age['age']), '(' + budgets + ')')
+        log(STANDARD, ' ', int(budgets_age['age']),
+            (budgets_age['total'] / budgets_age['age']), '(' + budgets + ')')
+
 
 if __name__ == '__main__':
     main()
