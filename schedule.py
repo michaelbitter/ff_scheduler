@@ -1,11 +1,20 @@
 #!/usr/bin/env python
 
-#num_teams = 10
-#teams = range(1, num_teams+1)
-#div1_teams = range(1, (num_teams/2)+1)
-#div2_teams = range((num_teams/2)+1, num_teams+1)
-div1_teams = ['Michael', 'Chris', 'DaveM', 'DaveW', 'David']
-div2_teams = ['Scott', 'Mikey', 'Patrick', 'Mike', 'Dallas']
+import sys
+
+div1_teams = ['Patrick', 'Chris', 'David', 'Jaden', 'Michael']
+div2_teams = ['Scott', 'DaveW', 'Mike', 'DaveM', 'Dallas']
+week_ordering = [2, 1, 3, 9, 10, 11, 12, 8, 4, 5, 6, 7, 13]
+
+order = 1
+for week in sorted(week_ordering):
+    try:
+        assert order == week
+    except AssertionError:
+        print "Error: Got Week {} but expected Week {}, it looks like week_ordering is missing/contains duplicate weeks.".format(week, order)
+        sys.exit(1)
+    order += 1
+
 teams = div1_teams + div2_teams
 div2_teams.reverse()
 
@@ -31,11 +40,19 @@ def find_additional_matchup(team, matchups):
             return matchup
     raise Exception('Team {} not found in matchups {}'.format(
         team, matchups))
-    
+
+def warn_on_duplicates(prev, curr):
+    for curr_teams in curr:
+        for prev_teams in prev:
+            if sorted(curr_teams) == sorted(prev_teams):
+                print "Warning: Duplicate matchup between {} and {}".format(curr_teams[0], curr_teams[1])
+
+season_matchups = []
 # Week 1 - 8
 for week in range(1, 9):
     matchups = matchup(teams)
-    print_matchups(week, matchups)
+    season_matchups.append(matchups)
+    #print_matchups(week, matchups)
     teams = teams + [teams.pop(1)]
 
 # Week 9 - 12
@@ -51,7 +68,8 @@ for week in range(9, 13):
     
     div1_matchups = matchup(div1_teams)
     div2_matchups = matchup(div2_teams)
-    print_matchups(week, div1_matchups + div2_matchups + [additional_matchup])
+    season_matchups.append(div1_matchups + div2_matchups + [additional_matchup])
+    #print_matchups(week, div1_matchups + div2_matchups + [additional_matchup])
     div1_teams.append(odd_man1)
     div2_teams.append(odd_man2)
     div1_teams = div1_teams + [div1_teams.pop(1)]
@@ -68,4 +86,15 @@ div1_teams = div1_teams + [div1_teams.pop(1)]
 div2_teams = div2_teams + [div2_teams.pop(1)]
 div1_matchups = matchup(div1_teams)
 div2_matchups = matchup(div2_teams)
-print_matchups(13, div1_matchups + div2_matchups + [additional_matchup])
+season_matchups.append(div1_matchups + div2_matchups + [additional_matchup])
+#print_matchups(13, div1_matchups + div2_matchups + [additional_matchup])
+
+week = 1
+previous_matchups = None
+for order in week_ordering:
+    current_matchups = season_matchups[order-1]
+    print_matchups(week, current_matchups)
+    if previous_matchups:
+        warn_on_duplicates(previous_matchups, current_matchups)
+    previous_matchups = current_matchups
+    week += 1
