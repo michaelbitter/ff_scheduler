@@ -7,23 +7,24 @@ import pprint
 import random
 
 from collections import defaultdict
+from multiprocessing import Pool
 
 POPULATION_SIZE = 10000
-GENERATIONS = 10
+GENERATIONS = 100
 FITNESS = int(POPULATION_SIZE * 0.25) or 1
 
 NUM_TEAMS = 10
 ROSTER_SIZE = dict(
-    QB=1,
-    WR=2,
-    RB=2,
-    TE=1,
+    QB=2,
+    WR=5,
+    RB=5,
+    TE=2,
     K=1,
     DEF=1,
 )
 
 AUCTION_BUDGET = 200
-MAXIMUM_BID = 90
+MAXIMUM_BID = 150
 
 # Logging Levels
 STANDARD = 0
@@ -48,6 +49,18 @@ def log(log_level, *msgs, **kwargs):
             print msg
 
 
+def memoize(f):
+    cache = {}
+    def decorated_function(*args):
+        if args in cache:
+            return cache[args]
+        else:
+            cache[args] = f(*args)
+            return cache[args]
+    return decorated_function
+
+
+@memoize
 def read_data():
     draft_data = {}
     year = '-{}'.format(args.year) if args.year else ''
@@ -96,7 +109,8 @@ def get_random_pp_draft_budget():
     return sorted(pp_draft_budget, key=lambda p: p['budget'], reverse=True)
 
 
-def draft(draft_data, draft_budgets):
+def draft(draft_budgets):
+    draft_data = read_data()
     pick = 0
     drafted_positions = {p: 0 for p in ROSTER_SIZE.keys()}
     draft_results = [[] for _ in range(NUM_TEAMS)]
@@ -114,7 +128,7 @@ def draft(draft_data, draft_budgets):
             player = draft_data[position][drafted_positions[position]]
             player['pick'] = pick
             player['position'] = position
-            log(DETAIL, 'Pick {}: Team {} nominates {} {}'.format(pick, team, position, player['Player Name']))
+            log(DEBUG, 'Pick {}: Team {} nominates {} {}'.format(pick, team, position, player['Player Name']))
 
             # auction off the player
             # XXX we don't need each team to nominate every pp. Instead,
@@ -145,7 +159,7 @@ def draft(draft_data, draft_budgets):
 
             drafted_positions[position] += 1
             pick += 1
-            log(DETAIL, 'Pick {}: Team {} drafts {} {} for ${}'.format(pick, winning_team, position, player['Player Name'], winning_bid['budget']))
+            log(DEBUG, 'Pick {}: Team {} drafts {} {} for ${}'.format(pick, winning_team, position, player['Player Name'], winning_bid['budget']))
 
     return draft_results
 
@@ -247,21 +261,22 @@ def median(lst):
 
 
 def main():
-    draft_data = read_data()
-
     generation_draft_budgets = []
     for generation in range(GENERATIONS):
         for _ in range(POPULATION_SIZE - len(generation_draft_budgets)):
             draft_budgets = []
             for team in range(NUM_TEAMS):
                 team_budget = get_random_pp_draft_budget()
-                log(DETAIL, 'Team', team, 'budgets', make_draft_budget_key(team_budget))
+                log(DEBUG, 'Team', team, 'budgets', make_draft_budget_key(team_budget))
                 draft_budgets.append(team_budget)
             generation_draft_budgets.append(draft_budgets)
 
         draft_results = []
-        for draft_budgets in generation_draft_budgets:
-            draft_results.append(draft(draft_data, draft_budgets))
+
+        pool = Pool()
+        draft_results = pool.map(draft, generation_draft_budgets)
+        pool.close()
+        pool.join()
 
         record_draft_results(generation, draft_results)
         generation_draft_budgets = spawn_next_generation(draft_results)
