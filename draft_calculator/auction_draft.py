@@ -13,17 +13,17 @@ POPULATION_SIZE = 10000
 GENERATIONS = 100
 FITNESS = int(POPULATION_SIZE * 0.25) or 1
 
-NUM_TEAMS = 10
+NUM_TEAMS = 12
 ROSTER_SIZE = dict(
-    QB=2,
-    WR=5,
-    RB=5,
-    TE=2,
+    QB=1,
+    WR=3,
+    RB=3,
+    TE=1,
     K=1,
     DEF=1,
 )
 
-AUCTION_BUDGET = 200
+AUCTION_BUDGET = 185
 MAXIMUM_BID = 150
 
 # Logging Levels
