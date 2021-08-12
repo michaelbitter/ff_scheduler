@@ -9,8 +9,8 @@ import random
 from collections import defaultdict
 from multiprocessing import Pool
 
-POPULATION_SIZE = 10000
-GENERATIONS = 100
+POPULATION_SIZE = 1000
+GENERATIONS = 10
 FITNESS = int(POPULATION_SIZE * 0.25) or 1
 
 NUM_TEAMS = 12
@@ -42,7 +42,8 @@ args = parser.parse_args()
 
 def log(log_level, *msgs, **kwargs):
     msg = ' '.join(map(str, msgs))
-    if args.verbose >= log_level:
+    display_level = args.verbose or 0
+    if display_level >= log_level:
         if kwargs.get('no_newline', False):
             print msg,
         else:
@@ -63,10 +64,10 @@ def memoize(f):
 @memoize
 def read_data():
     draft_data = {}
-    year = '-{}'.format(args.year) if args.year else ''
+    year = args.year if args.year else '2019'
     for position in ROSTER_SIZE.keys():
 
-        with open('data/{}{}.csv'.format(position, year), 'rb') as csvfile:
+        with open('data/{}/{}.csv'.format(year, position), 'rb') as csvfile:
             player_reader = csv.DictReader(csvfile)
             draft_data[position] = []
             rank = 1
