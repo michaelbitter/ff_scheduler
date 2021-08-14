@@ -9,11 +9,11 @@ import random
 from collections import defaultdict
 from multiprocessing import Pool
 
-POPULATION_SIZE = 1000
-GENERATIONS = 10
+POPULATION_SIZE = 10000
+GENERATIONS = 100
 FITNESS = int(POPULATION_SIZE * 0.25) or 1
 
-NUM_TEAMS = 12
+NUM_TEAMS = 10
 ROSTER_SIZE = dict(
     QB=1,
     WR=3,
@@ -64,7 +64,7 @@ def memoize(f):
 @memoize
 def read_data():
     draft_data = {}
-    year = args.year if args.year else '2019'
+    year = args.year if args.year else '2021'
     for position in ROSTER_SIZE.keys():
 
         with open('data/{}/{}.csv'.format(year, position), 'rb') as csvfile:
@@ -262,6 +262,15 @@ def median(lst):
 
 
 def main():
+    player_data = read_data()
+    player_values = {}
+    for position in player_data.keys():
+        replacement_index = NUM_TEAMS * ROSTER_SIZE[position] - 1
+        replacement_value = float(player_data[position][replacement_index]['fpts'])
+        log(DEBUG, 'Replacement', position, 'is', player_data[position][replacement_index]['Player Name'], 'with value', replacement_value)
+        for player_info in player_data[position]:
+            player_values[player_info['Player Name']] = float(player_info['fpts']) - replacement_value
+
     generation_draft_budgets = []
     for generation in range(GENERATIONS):
         for _ in range(POPULATION_SIZE - len(generation_draft_budgets)):
@@ -284,11 +293,15 @@ def main():
 
         for position in sorted(PLAYER_BUDGETS.keys()):
             log(INFO, '{} player values:'.format(position))
+            log(INFO, ','.join(['player', 'position', 'points_above_replacement', 'min_auction_value', 'median_auction_value', 'max_auction_value']))
             for player in sorted(PLAYER_BUDGETS[position], key=lambda p: median(PLAYER_BUDGETS[position][p]), reverse=True):
-                log(INFO, '{}:'.format(player),
-                    min(PLAYER_BUDGETS[position][player]),
-                    median(PLAYER_BUDGETS[position][player]),
-                    max(PLAYER_BUDGETS[position][player]))
+                med = median(PLAYER_BUDGETS[position][player])
+                log(INFO, ','.join([str(s) for s in [player,
+                              position,
+                              player_values[player],
+                              min(PLAYER_BUDGETS[position][player]),
+                              med,
+                              max(PLAYER_BUDGETS[position][player])]]))
             log(INFO, '')
 
         log(STANDARD, 'Generation {} summary of drafting budgets:'.format(generation))
