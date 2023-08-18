@@ -2,16 +2,16 @@
 
 import sys
 
-div1_teams = ['Patrick', 'Chris', 'David', 'Jaden', 'Michael']
-div2_teams = ['Scott', 'DaveW', 'Mike', 'DaveM', 'Dallas']
-week_ordering = [2, 1, 3, 9, 10, 11, 12, 8, 4, 5, 6, 7, 13]
+div1_teams = ['Todd', 'Chris', 'David', 'Christian', 'Michael']
+div2_teams = ['TJ', 'Jaden', 'Lou', 'Asahi', 'Jackson']
+week_ordering = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
 
 order = 1
 for week in sorted(week_ordering):
     try:
         assert order == week
     except AssertionError:
-        print "Error: Got Week {} but expected Week {}, it looks like week_ordering is missing/contains duplicate weeks.".format(week, order)
+        print("Error: Got Week {} but expected Week {}, it looks like week_ordering is missing/contains duplicate weeks.".format(week, order))
         sys.exit(1)
     order += 1
 
@@ -22,17 +22,17 @@ def matchup(teams):
     num_teams = len(teams)+1
     static = teams.pop(0)
     matchups = [[static, teams[0]]]
-    for i in range(1, num_teams/2):
+    for i in range(1, int(num_teams/2)):
         matchups.extend([[teams[i], teams[-i]]])
 
     teams.insert(0, static)
     return matchups
     
 def print_matchups(week, matchups):
-    print "Week", week, "schedule:"
+    print("Week", week, "schedule:")
     for teams in matchups:
-        print "\t", teams[0], "vs", teams[1]
-    print
+        print("\t", teams[0], "vs", teams[1])
+    print()
 
 def find_additional_matchup(team, matchups):
     for matchup in matchups:
@@ -45,7 +45,7 @@ def warn_on_duplicates(prev, curr):
     for curr_teams in curr:
         for prev_teams in prev:
             if sorted(curr_teams) == sorted(prev_teams):
-                print "Warning: Duplicate matchup between {} and {}".format(curr_teams[0], curr_teams[1])
+                print("Warning: Duplicate matchup between {} and {}".format(curr_teams[0], curr_teams[1]))
 
 season_matchups = []
 # Week 1 - 8

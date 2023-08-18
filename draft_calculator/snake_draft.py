@@ -11,10 +11,10 @@ POPULATION_SIZE = 10000
 GENERATIONS = 100
 FITNESS = int(POPULATION_SIZE * 0.25)
 
-NUM_TEAMS = 10
+NUM_TEAMS = 12
 ROSTER_SIZE = dict(
     QB=1,
-    WR=2,
+    WR=3,
     RB=2,
     TE=1,
     K=1,
@@ -45,10 +45,10 @@ def log(log_level, *msgs, **kwargs):
 
 def read_data():
     draft_data = {}
-    year = '-{}'.format(args.year) if args.year else ''
+    year = args.year if args.year else '2021'
     for position in ROSTER_SIZE.keys():
 
-        with open('data/{}{}.csv'.format(position, year), 'rb') as csvfile:
+        with open('data/{}/{}.csv'.format(year, position), 'rb') as csvfile:
             player_reader = csv.DictReader(csvfile)
             draft_data[position] = []
             rank = 1

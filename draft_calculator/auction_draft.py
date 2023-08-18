@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import datetime
 import copy
 import csv
 import pprint
@@ -11,20 +12,20 @@ from multiprocessing import Pool
 
 POPULATION_SIZE = 10000
 GENERATIONS = 100
-FITNESS = int(POPULATION_SIZE * 0.25) or 1
+FITNESS = int(POPULATION_SIZE * 0.15) or 1
 
 NUM_TEAMS = 10
 ROSTER_SIZE = dict(
-    QB=1,
-    WR=3,
-    RB=3,
+    QB=2,
+    WR=4,
+    RB=4,
     TE=1,
     K=1,
     DEF=1,
 )
 
-AUCTION_BUDGET = 185
-MAXIMUM_BID = 150
+AUCTION_BUDGET = 297
+MAXIMUM_BID = 225
 
 # Logging Levels
 STANDARD = 0
@@ -45,9 +46,9 @@ def log(log_level, *msgs, **kwargs):
     display_level = args.verbose or 0
     if display_level >= log_level:
         if kwargs.get('no_newline', False):
-            print msg,
+            print(msg, end=' ')
         else:
-            print msg
+            print(msg, flush=True)
 
 
 def memoize(f):
@@ -64,10 +65,11 @@ def memoize(f):
 @memoize
 def read_data():
     draft_data = {}
-    year = args.year if args.year else '2021'
-    for position in ROSTER_SIZE.keys():
-
-        with open('data/{}/{}.csv'.format(year, position), 'rb') as csvfile:
+    year = args.year if args.year else datetime.date.today().year
+    print(year)
+    for position in list(ROSTER_SIZE.keys()):
+        log(DEBUG, 'Processing data/{}/{}.csv'.format(year, position))
+        with open('data/{}/{}.csv'.format(year, position), 'r', encoding='utf8') as csvfile:
             player_reader = csv.DictReader(csvfile)
             draft_data[position] = []
             rank = 1
@@ -82,6 +84,23 @@ def read_data():
                 rank += 1
     return draft_data
 
+def _round(n, d=1):
+    round_factor = 10.0 ** d
+    return int(n * round_factor + 0.5) / round_factor
+
+
+@memoize
+def player_value_above_replacement():
+    player_data = read_data()
+    player_values = {}
+    for position in list(player_data.keys()):
+        replacement_index = NUM_TEAMS * ROSTER_SIZE[position] - 1
+        replacement_value = float(player_data[position][replacement_index]['fpts'])
+        log(DEBUG, 'Replacement', position, 'is', player_data[position][replacement_index]['Player Name'], 'with value', replacement_value)
+        for player_info in player_data[position]:
+            player_values[player_info['Player Name']] = _round(float(player_info['fpts']) - replacement_value)
+    return player_values
+
 
 def distribute(additional_budget, draft_budget):
     draft_budget[0]['budget'] += additional_budget
@@ -94,7 +113,7 @@ def get_random_pp_draft_budget():
     budget_remaining = AUCTION_BUDGET
     pp_draft_budget = []
     pp_draft_order = []
-    for position, count in ROSTER_SIZE.iteritems():
+    for position, count in ROSTER_SIZE.items():
         pp_draft_order.extend([position for _ in range(count)])
 
     random.shuffle(pp_draft_order)
@@ -113,13 +132,13 @@ def get_random_pp_draft_budget():
 def draft(draft_budgets):
     draft_data = read_data()
     pick = 0
-    drafted_positions = {p: 0 for p in ROSTER_SIZE.keys()}
+    drafted_positions = {p: 0 for p in list(ROSTER_SIZE.keys())}
     draft_results = [[] for _ in range(NUM_TEAMS)]
 
     # XXX could this just be one long array of positions?
     pps_remaining_by_team = [[] for _ in range(NUM_TEAMS)]
     for team in range(len(pps_remaining_by_team)):
-        for position, count in ROSTER_SIZE.iteritems():
+        for position, count in ROSTER_SIZE.items():
             pps_remaining_by_team[team].extend([position for _ in range(count)])
         random.shuffle(pps_remaining_by_team[team])
 
@@ -168,7 +187,7 @@ def draft(draft_budgets):
 def sanity_check(draft_budget):
     budget = sum([p['budget'] for p in draft_budget])
     if budget != AUCTION_BUDGET:
-        print 'OVER BUDGET!!! ({})'.format(budget)
+        print('OVER BUDGET!!! ({})'.format(budget))
         pprint.pprint(draft_budget)
 
 
@@ -190,10 +209,12 @@ def draft_budget_key_to_budgets(budget_key):
 
 def record_draft_results(current_generation, drafts_results):
     log(DETAIL, 'Generation', current_generation, 'Results')
+    player_values = player_value_above_replacement()
     for draft_results in drafts_results:
         for team in range(len(draft_results)):
             draft_result = draft_results[team]
-            score = sum([float(player['fpts']) for player in draft_result])
+            #score = sum([float(player['fpts']) for player in draft_result])
+            score = sum([player_values[player['Player Name']] for player in draft_result])
 
             draft_budget = [{'position': player['position'], 'budget': player['value'], 'Player Name': player['Player Name']} for player in draft_result]
             draft_budget.sort(key=lambda p: p['budget'], reverse=True)
@@ -227,7 +248,7 @@ def spawn_next_generation(drafts_results):
         budget_key = make_draft_budget_key(combined_results[draft_number])
         fit_budgets.append(budget_key)
         for player in combined_results[draft_number]:
-            if DRAFT_BUDGETS_AGE[budget_key]['age'] > 1:
+            if DRAFT_BUDGETS_AGE[budget_key]['age'] > 25:
                 PLAYER_BUDGETS[player['position']][player['Player Name']].append(player['budget'])
 
         # mutate team drafts
@@ -256,21 +277,13 @@ def median(lst):
     if len(lst) < 1:
             return None
     if len(lst) %2 == 1:
-            return lst[((len(lst)+1)/2)-1]
+            return lst[int((len(lst)+1)/2)-1]
     else:
-            return int((float(sum(lst[(len(lst)/2)-1:(len(lst)/2)+1]))/2.0) + 0.5)
+            return int((float(sum(lst[int(len(lst)/2)-1:int(len(lst)/2)+1]))/2.0) + 0.5)
 
 
 def main():
-    player_data = read_data()
-    player_values = {}
-    for position in player_data.keys():
-        replacement_index = NUM_TEAMS * ROSTER_SIZE[position] - 1
-        replacement_value = float(player_data[position][replacement_index]['fpts'])
-        log(DEBUG, 'Replacement', position, 'is', player_data[position][replacement_index]['Player Name'], 'with value', replacement_value)
-        for player_info in player_data[position]:
-            player_values[player_info['Player Name']] = float(player_info['fpts']) - replacement_value
-
+    player_values = player_value_above_replacement()
     generation_draft_budgets = []
     for generation in range(GENERATIONS):
         for _ in range(POPULATION_SIZE - len(generation_draft_budgets)):
@@ -305,7 +318,7 @@ def main():
             log(INFO, '')
 
         log(STANDARD, 'Generation {} summary of drafting budgets:'.format(generation))
-        sorted_budgets_by_age = sorted([d for d in DRAFT_BUDGETS_AGE.items() if d[1]['age'] >= 5],
+        sorted_budgets_by_age = sorted([d for d in list(DRAFT_BUDGETS_AGE.items()) if d[1]['age'] >= min(generation*5, 25)],
                                        key=lambda d: d[1]['total'] / d[1]['age'],
                                        reverse=True)
 
@@ -314,7 +327,7 @@ def main():
                 break
             budgets, budgets_age = sorted_budgets_by_age[i]
             log(STANDARD, ' ', int(budgets_age['age']),
-                (budgets_age['total'] / budgets_age['age']), '(' + budgets + ')')
+                _round(budgets_age['total'] / budgets_age['age']), '(' + budgets + ')')
 
 
 if __name__ == '__main__':
