@@ -66,7 +66,6 @@ def memoize(f):
 def read_data():
     draft_data = {}
     year = args.year if args.year else datetime.date.today().year
-    print(year)
     for position in list(ROSTER_SIZE.keys()):
         log(DEBUG, 'Processing data/{}/{}.csv'.format(year, position))
         with open('data/{}/{}.csv'.format(year, position), 'r', encoding='utf8') as csvfile:
