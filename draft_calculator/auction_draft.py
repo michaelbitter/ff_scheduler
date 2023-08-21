@@ -20,8 +20,64 @@ ROSTER_SIZE = dict(
     WR=4,
     RB=4,
     TE=1,
+#    FLEX=4,
     K=1,
     DEF=1,
+#    BENCH=3,
+)
+
+SCORING_SETTINGS = dict(
+    QB=dict(
+        fumble_lost=-2,
+        passing_attempts=0,
+        passing_completions=0,
+        passing_int=-2,
+        passing_td=6,
+        passing_yards=0.05,
+        rushing_attempts=0,
+        rushing_td=6,
+        rushing_yards=0.1,
+    ),
+    WR=dict(
+        fumble_lost=-2,
+        receiving_td=6,
+        receiving_yards=0.1,
+        receptions=0.5,
+        rushing_attempts=0,
+        rushing_td=6,
+        rushing_yards=0.1,
+    ),
+    RB=dict(
+        fumble_lost=-2,
+        receiving_td=6,
+        receiving_yards=0.1,
+        receptions=0.5,
+        rushing_attempts=0,
+        rushing_td=6,
+        rushing_yards=0.1,
+    ),
+    TE=dict(
+        fumble_lost=-2,
+        receiving_td=6,
+        receiving_yards=0.1,
+        receptions=0.5,
+    ),
+    K=dict(
+        extra_point=1,
+        fg=4,
+        fg_attempt=0,
+        #fg_miss=-2, # XXX figure out how to derive this # derived from total fg_attempts - total fgs
+    ),
+    DEF=dict(
+        fumble_recovery=2,
+        forced_fumble=1,
+        interception=2,
+        points_allowed=-0.065,
+        sack=2,
+        safety=4,
+        td=8,
+        yards_against=0,
+    ),
 )
 
 AUCTION_BUDGET = 297
@@ -70,11 +126,19 @@ def read_data():
         log(DEBUG, 'Processing data/{}/{}.csv'.format(year, position))
         with open('data/{}/{}.csv'.format(year, position), 'r', encoding='utf8') as csvfile:
             player_reader = csv.DictReader(csvfile)
+            players = []
             draft_data[position] = []
             rank = 1
 
-            for player in sorted(player_reader, key=lambda p: float(p['fpts']), reverse=True):
-                log(DEBUG, '{}: {} {}'.format(rank, position, player['Player Name']))
+            for player in player_reader:
+                fpts = 0
+                for action, score in SCORING_SETTINGS[position].items():
+                    fpts += float(player[action].replace(',','')) * score
+                player['fpts'] = _round(fpts)
+                players.append(player)
+
+            for player in sorted(players, key=lambda p: p['fpts'], reverse=True):
+                log(DETAIL, '{}: {} {} ({})'.format(rank, position, player['Player Name'], player['fpts']))
                 if rank > ROSTER_SIZE[position] * NUM_TEAMS: # XXX TODO: account for flex/bench
                     break
 
@@ -82,6 +146,7 @@ def read_data():
                 draft_data[position].append(player)
                 rank += 1
     return draft_data
+
 
 def _round(n, d=1):
     round_factor = 10.0 ** d
@@ -92,12 +157,17 @@ def _round(n, d=1):
 def player_value_above_replacement():
     player_data = read_data()
     player_values = {}
+    total_budget = NUM_TEAMS * AUCTION_BUDGET
+    total_value = 0
     for position in list(player_data.keys()):
         replacement_index = NUM_TEAMS * ROSTER_SIZE[position] - 1
         replacement_value = float(player_data[position][replacement_index]['fpts'])
         log(DEBUG, 'Replacement', position, 'is', player_data[position][replacement_index]['Player Name'], 'with value', replacement_value)
         for player_info in player_data[position]:
-            player_values[player_info['Player Name']] = _round(float(player_info['fpts']) - replacement_value)
+            value_above_replacement = _round(player_info['fpts'] - replacement_value)
+            player_values[player_info['Player Name']] = value_above_replacement
+            total_value += value_above_replacement
+    log(STANDARD, 'Point Cost is', _round(total_value/total_budget, 3), 'points per dollar (', _round(total_value), 'pts / $', total_budget, ')')
     return player_values
 
 
@@ -212,11 +282,10 @@ def record_draft_results(current_generation, drafts_results):
     for draft_results in drafts_results:
         for team in range(len(draft_results)):
             draft_result = draft_results[team]
-            #score = sum([float(player['fpts']) for player in draft_result])
             score = sum([player_values[player['Player Name']] for player in draft_result])
 
             draft_budget = [{'position': player['position'], 'budget': player['value'], 'Player Name': player['Player Name']} for player in draft_result]
-            draft_budget.sort(key=lambda p: p['budget'], reverse=True)
+            draft_budget.sort(key=lambda p: (p['budget'],p['position']), reverse=True)
 
             budget_key = make_draft_budget_key(draft_budget)
             DRAFT_BUDGETS_AGE[budget_key]['age'] += 1
@@ -236,7 +305,7 @@ def spawn_next_generation(drafts_results):
     for draft_results in drafts_results:
         for draft_result in draft_results:
             draft_budget = [{'position': player['position'], 'budget': player['value'], 'Player Name': player['Player Name'], 'fpts': player['fpts']} for player in draft_result]
-            draft_budget.sort(key=lambda p: p['budget'], reverse=True)
+            draft_budget.sort(key=lambda p: (p['budget'], p['position']), reverse=True)
             combined_results.append(draft_budget)
     #combined_results.sort(key=lambda d: sum([float(player['fpts']) for player in d]), reverse=True)
     combined_results.sort(
@@ -247,7 +316,7 @@ def spawn_next_generation(drafts_results):
         budget_key = make_draft_budget_key(combined_results[draft_number])
         fit_budgets.append(budget_key)
         for player in combined_results[draft_number]:
-            if DRAFT_BUDGETS_AGE[budget_key]['age'] > 25:
+            if DRAFT_BUDGETS_AGE[budget_key]['age'] > 5:
                 PLAYER_BUDGETS[player['position']][player['Player Name']].append(player['budget'])
 
         # mutate team drafts
@@ -317,7 +386,7 @@ def main():
             log(INFO, '')
 
         log(STANDARD, 'Generation {} summary of drafting budgets:'.format(generation))
-        sorted_budgets_by_age = sorted([d for d in list(DRAFT_BUDGETS_AGE.items()) if d[1]['age'] >= min(generation*5, 25)],
+        sorted_budgets_by_age = sorted([d for d in list(DRAFT_BUDGETS_AGE.items()) if d[1]['age'] >= min(generation, 5)],
                                        key=lambda d: d[1]['total'] / d[1]['age'],
                                        reverse=True)
 
@@ -327,6 +396,7 @@ def main():
             budgets, budgets_age = sorted_budgets_by_age[i]
             log(STANDARD, ' ', int(budgets_age['age']),
                 _round(budgets_age['total'] / budgets_age['age']), '(' + budgets + ')')
+        log(STANDARD, '')
 
 
 if __name__ == '__main__':

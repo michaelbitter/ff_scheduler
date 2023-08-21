@@ -1,4 +1,4 @@
-"Player Name","Team","ATT","CMP","YDS","TDS","INTS","ATT","YDS","TDS","FL","fpts"
+"Player Name","Team","passing_attempts","passing_completions","passing_yards","passing_td","passing_int","rushing_attempts","rushing_yards","rushing_td","fumble_lost","fpts"
 "Patrick Mahomes II","KC","609.6","405.5","4,832.1","37.7","11.2","64.9","356.8","3.2","1.9","383.8"
 "Josh Allen","BUF","575.6","362.9","4,275.1","32.0","14.2","117.0","661.4","6.2","4.2","380.2"
 "Jalen Hurts","PHI","494.6","318.5","3,827.7","23.8","10.1","158.1","803.2","11.1","2.9","379.3"

@@ -1,4 +1,4 @@
-"Player Name","Team","FG","FGA","XPT","fpts"
+"Player Name","Team","fg","fg_attempt","extra_point","fpts"
 "Zane Gonzalez","SF","29.8","35.8","41.0","130.4"
 "Greg Joseph","MIN","28.2","33.7","40.5","125.2"
 "Justin Tucker","BAL","27.8","31.7","40.9","124.3"

@@ -1,4 +1,4 @@
-"Player Name","Team","SACK","INT","FR","FF","TD","SAFETY","PA","YDS_AGN","fpts"
+"Player Name","Team","sack","interception","fumble_recovery","forced_fumble","td","safety","points_allowed","yards_against","fpts"
 "Philadelphia Eagles","","55.7","10.2","7.8","16.4","2.2","0.4","287.8","5,348.2","106.0"
 "Dallas Cowboys","","47.6","12.1","10.2","20.6","2.3","0.0","295.6","5,666.7","105.8"
 "New England Patriots","","46.6","12.4","7.7","14.3","2.4","0.1","291.2","5,683.5","101.5"

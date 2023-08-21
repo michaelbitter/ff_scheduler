@@ -1,4 +1,4 @@
-"Player Name","Team","REC","YDS","TDS","ATT","YDS","TDS","FL","fpts"
+"Player Name","Team","receptions","receiving_yards","receiving_td","rushing_attempts","rushing_yards","rushing_td","fumble_lost","fpts"
 "Justin Jefferson","MIN","110.5","1,532.2","8.2","3.7","18.0","0.3","0.4","205.1"
 "Ja'Marr Chase","CIN","107.4","1,379.0","10.2","5.2","24.6","0.1","1.1","200.1"
 "Tyreek Hill","MIA","106.0","1,410.1","7.8","9.5","60.1","0.6","0.5","196.2"
